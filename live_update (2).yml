@@ -1,0 +1,42 @@
+name: Live Tournament Update
+on:
+  schedule:
+    - cron: '*/2 * * * *'
+  workflow_dispatch:
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install numpy
+      - name: Run live updater
+        env:
+          APIFOOTBALL_KEY: ${{ secrets.APIFOOTBALL_KEY }}
+        run: |
+          python update_results.py
+      - name: Generate content ideas
+        run: python content_generator.py
+      - name: Commit results
+        run: |
+          git config user.name  "Olympus Bot"
+          git config user.email "bot@projectolympus"
+          git add olympus_live.json cache_players.json cache_events.json cache_lineups.json content_ideas.md
+          git diff --staged --quiet && exit 0
+          git commit -m "Live update $(date -u '+%H:%M:%S UTC')"
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --soft origin/main
+            git add olympus_live.json cache_players.json cache_events.json cache_lineups.json content_ideas.md
+            git commit -m "Live update $(date -u '+%H:%M:%S UTC')" --allow-empty
+            git push origin main && break
+            echo "Retry $i failed, sleeping..."
+            sleep $((i * 5))
+          done
